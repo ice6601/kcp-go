@@ -19,6 +19,7 @@ import (
 var (
 	errTimeout    = errors.New("i/o timeout")
 	errBrokenPipe = errors.New("broken pipe")
+	rng           = rand.New(rand.NewSource(time.Now().UnixNano()))
 )
 
 const (
@@ -708,7 +709,7 @@ func DialWithOptions(fec int, raddr string, block BlockCrypt) (*UDPSession, erro
 	}
 
 	for {
-		port := basePort + rand.Int()%(maxPort-basePort)
+		port := basePort + rng.Int()%(maxPort-basePort)
 		if udpconn, err := net.ListenUDP("udp", &net.UDPAddr{Port: port}); err == nil {
 			return newUDPSession(rand.Uint32(), fec, nil, udpconn, udpaddr, block), nil
 		}
