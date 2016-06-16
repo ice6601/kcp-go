@@ -55,7 +55,6 @@ type (
 		chTicker      chan time.Time
 		chUDPOutput   chan []byte
 		headerSize    int
-		lastInputTs   time.Time
 		ackNoDelay    bool
 	}
 )
@@ -73,7 +72,6 @@ func newUDPSession(conv uint32, fec int, l *Listener, conn *net.UDPConn, remote 
 	sess.conn = conn
 	sess.l = l
 	sess.block = block
-	sess.lastInputTs = time.Now()
 	if fec > 0 {
 		sess.fec = newFEC(fec, rxFecLimit)
 	}
@@ -378,17 +376,11 @@ func (s *UDPSession) outputTask() {
 				atomic.AddUint64(&DefaultSnmp.OutSegs, 1)
 				atomic.AddUint64(&DefaultSnmp.OutBytes, uint64(n))
 			}
-		case <-ticker.C:
+		case <-ticker.C: // only for NAT keep purpose
 			sz := rand.Intn(IKCP_MTU_DEF - s.headerSize - IKCP_OVERHEAD)
 			sz += s.headerSize + IKCP_OVERHEAD
 			ping := make([]byte, sz)
 			io.ReadFull(crand.Reader, ping)
-			if s.block != nil {
-				checksum := crc32.ChecksumIEEE(ping[cryptHeaderSize:])
-				binary.LittleEndian.PutUint32(ping[otpSize:], checksum)
-				s.block.Encrypt(ping, ping)
-			}
-
 			n, err := s.conn.WriteTo(ping, s.remote)
 			if err != nil {
 				log.Println(err, n)
@@ -455,13 +447,6 @@ func (s *UDPSession) notifyWriteEvent() {
 
 func (s *UDPSession) kcpInput(data []byte) {
 	atomic.AddUint64(&DefaultSnmp.InSegs, 1)
-	now := time.Now()
-	if now.Sub(s.lastInputTs) > connTimeout {
-		s.Close()
-		return
-	}
-	s.lastInputTs = now
-
 	s.mu.Lock()
 	if s.fec != nil {
 		f := fecDecode(data)
