@@ -717,6 +717,43 @@ func (kcp *KCP) flush() {
 		}
 	}
 
+	// early retransmit
+	for k := range kcp.snd_buf {
+		segment := &kcp.snd_buf[k]
+		needsend := false
+		if segment.fastack > 0 && len(kcp.snd_queue) == 0 {
+			needsend = true
+			segment.xmit++
+			segment.fastack = 0
+			segment.resendts = current + segment.rto
+			change++
+			atomic.AddUint64(&DefaultSnmp.RetransSegs, 1)
+			atomic.AddUint64(&DefaultSnmp.EarlyRetransSegs, 1)
+		}
+
+		if needsend {
+			segment.ts = current
+			segment.wnd = seg.wnd
+			segment.una = kcp.rcv_nxt
+
+			size := len(buffer) - len(ptr)
+			need := IKCP_OVERHEAD + len(segment.data)
+
+			if size+need >= int(kcp.mtu) {
+				kcp.output(buffer, size)
+				ptr = buffer
+			}
+
+			ptr = segment.encode(ptr)
+			copy(ptr, segment.data)
+			ptr = ptr[len(segment.data):]
+
+			if segment.xmit >= kcp.dead_link {
+				kcp.state = 0xFFFFFFFF
+			}
+		}
+	}
+
 	// flash remain segments
 	size := len(buffer) - len(ptr)
 	if size > 0 {
