@@ -692,36 +692,7 @@ func (kcp *KCP) flush() {
 			change++
 			atomic.AddUint64(&DefaultSnmp.RetransSegs, 1)
 			atomic.AddUint64(&DefaultSnmp.FastRetransSegs, 1)
-		}
-
-		if needsend {
-			segment.ts = current
-			segment.wnd = seg.wnd
-			segment.una = kcp.rcv_nxt
-
-			size := len(buffer) - len(ptr)
-			need := IKCP_OVERHEAD + len(segment.data)
-
-			if size+need >= int(kcp.mtu) {
-				kcp.output(buffer, size)
-				ptr = buffer
-			}
-
-			ptr = segment.encode(ptr)
-			copy(ptr, segment.data)
-			ptr = ptr[len(segment.data):]
-
-			if segment.xmit >= kcp.dead_link {
-				kcp.state = 0xFFFFFFFF
-			}
-		}
-	}
-
-	// early retransmit
-	for k := range kcp.snd_buf {
-		segment := &kcp.snd_buf[k]
-		needsend := false
-		if segment.fastack > 0 && len(kcp.snd_queue) == 0 {
+		} else if segment.fastack > 0 && len(kcp.snd_queue) == 0 { // early retransmit
 			needsend = true
 			segment.xmit++
 			segment.fastack = 0
