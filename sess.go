@@ -711,7 +711,7 @@ func DialWithOptions(fec int, raddr string, block BlockCrypt) (*UDPSession, erro
 	for {
 		port := basePort + rng.Int()%(maxPort-basePort)
 		if udpconn, err := net.ListenUDP("udp", &net.UDPAddr{Port: port}); err == nil {
-			return newUDPSession(rand.Uint32(), fec, nil, udpconn, udpaddr, block), nil
+			return newUDPSession(rng.Uint32(), fec, nil, udpconn, udpaddr, block), nil
 		}
 	}
 }
