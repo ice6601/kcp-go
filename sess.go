@@ -378,7 +378,7 @@ func (s *UDPSession) outputTask() {
 				atomic.AddUint64(&DefaultSnmp.OutBytes, uint64(n))
 			}
 		case <-ticker.C: // only for NAT keep purpose
-			sz := rand.Intn(IKCP_MTU_DEF - s.headerSize - IKCP_OVERHEAD)
+			sz := rng.Intn(IKCP_MTU_DEF - s.headerSize - IKCP_OVERHEAD)
 			sz += s.headerSize + IKCP_OVERHEAD
 			ping := make([]byte, sz)
 			io.ReadFull(crand.Reader, ping)
