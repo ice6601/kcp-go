@@ -853,16 +853,6 @@ func (kcp *KCP) SetMtu(mtu int) int {
 	return 0
 }
 
-func (kcp *KCP) Interval(interval int) int {
-	if interval > 5000 {
-		interval = 5000
-	} else if interval < 10 {
-		interval = 10
-	}
-	kcp.interval = uint32(interval)
-	return 0
-}
-
 // NoDelay options
 // fastest: ikcp_nodelay(kcp, 1, 20, 2, 1)
 // nodelay: 0:disable(default), 1:enable
