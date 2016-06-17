@@ -692,6 +692,15 @@ func (kcp *KCP) flush() {
 			change++
 			atomic.AddUint64(&DefaultSnmp.RetransSegs, 1)
 			atomic.AddUint64(&DefaultSnmp.FastRetransSegs, 1)
+		} else if segment.fastack > 0 && len(kcp.snd_queue) == 0 {
+			// early retransmit
+			needsend = true
+			segment.xmit++
+			segment.fastack = 0
+			segment.resendts = current + segment.rto
+			change++
+			atomic.AddUint64(&DefaultSnmp.RetransSegs, 1)
+			atomic.AddUint64(&DefaultSnmp.EarlyRetransSegs, 1)
 		}
 
 		if needsend {
