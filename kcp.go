@@ -383,6 +383,7 @@ func (kcp *KCP) parse_data(newseg *Segment) {
 	sn := newseg.sn
 	if _itimediff(sn, kcp.rcv_nxt+kcp.rcv_wnd) >= 0 ||
 		_itimediff(sn, kcp.rcv_nxt) < 0 {
+		atomic.AddUint64(&DefaultSnmp.RepeatSegs, 1)
 		return
 	}
 
