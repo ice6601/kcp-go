@@ -33,6 +33,7 @@ const (
 	mtuLimit        = 4096
 	rxQueueLimit    = 8192
 	rxFecLimit      = 2048
+	soBuffer        = 16777216
 )
 
 type (
@@ -674,6 +675,8 @@ func ListenWithOptions(fec int, laddr string, block BlockCrypt) (*Listener, erro
 	if err != nil {
 		return nil, err
 	}
+	conn.SetReadBuffer(soBuffer)
+	conn.SetWriteBuffer(soBuffer)
 
 	l := new(Listener)
 	l.conn = conn
@@ -707,10 +710,11 @@ func DialWithOptions(fec int, raddr string, block BlockCrypt) (*UDPSession, erro
 	if err != nil {
 		return nil, err
 	}
-
 	for {
 		port := basePort + rng.Int()%(maxPort-basePort)
 		if udpconn, err := net.ListenUDP("udp", &net.UDPAddr{Port: port}); err == nil {
+			udpconn.SetReadBuffer(soBuffer)
+			udpconn.SetWriteBuffer(soBuffer)
 			return newUDPSession(rng.Uint32(), fec, nil, udpconn, udpaddr, block), nil
 		}
 	}
