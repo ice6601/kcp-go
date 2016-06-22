@@ -75,7 +75,7 @@ func newUDPSession(conv uint32, fec int, l *Listener, conn *net.UDPConn, remote 
 	sess.l = l
 	sess.block = block
 	if fec > 0 {
-		sess.fec = newFEC(fec, rxFecLimit)
+		sess.fec = newFEC(rxFecLimit, 10, 3)
 	}
 
 	// caculate header size
@@ -315,14 +315,13 @@ func (s *UDPSession) outputTask() {
 	if s.block != nil {
 		fecOffset = cryptHeaderSize
 	}
+	szOffset := fecOffset + fecHeaderSize
+
 	var fec_group [][]byte
 	var fec_cnt int
+	var fec_maxlen int
 	if s.fec != nil {
-		// fec group buffer
-		fec_group = make([][]byte, s.fec.cluster)
-		for i := 0; i < len(fec_group); i++ {
-			fec_group[i] = make([]byte, mtuLimit)
-		}
+		fec_group = make([][]byte, s.fec.dataShards)
 	}
 
 	// ping
@@ -331,22 +330,28 @@ func (s *UDPSession) outputTask() {
 	for {
 		select {
 		case ext := <-s.chUDPOutput:
-			var ecc []byte
+			var ecc [][]byte
 			if s.fec != nil {
 				s.fec.markData(ext[fecOffset:])
 				// add 2B size
-				binary.LittleEndian.PutUint16(ext[fecOffset+fecHeaderSize:], uint16(len(ext[fecOffset+fecHeaderSize:])))
+				binary.LittleEndian.PutUint16(ext[szOffset:], uint16(len(ext[szOffset:])))
 
 				// copy data to fec group
-				copy(fec_group[fec_cnt][:mtuLimit], ext)
-				fec_group[fec_cnt] = fec_group[fec_cnt][:len(ext)]
+				fec_group[fec_cnt] = make([]byte, mtuLimit)
+				copy(fec_group[fec_cnt], ext)
 				fec_cnt++
+				if len(ext) > fec_maxlen {
+					fec_maxlen = len(ext)
+				}
 
 				// cacluation of ecc
-				if fec_cnt == s.fec.cluster {
-					ecc = s.fec.calcECC(fec_group)
-					s.fec.markFEC(ecc[fecOffset:])
+				if fec_cnt == s.fec.dataShards {
+					ecc = s.fec.calcECC(fec_group, szOffset, fec_maxlen)
+					for k := range ecc {
+						s.fec.markFEC(ecc[k][fecOffset:])
+					}
 					fec_cnt = 0
+					fec_maxlen = 0
 				}
 			}
 
@@ -357,10 +362,12 @@ func (s *UDPSession) outputTask() {
 				s.block.Encrypt(ext, ext)
 
 				if ecc != nil {
-					io.ReadFull(crand.Reader, ecc[:otpSize])
-					checksum := crc32.ChecksumIEEE(ecc[cryptHeaderSize:])
-					binary.LittleEndian.PutUint32(ecc[otpSize:], checksum)
-					s.block.Encrypt(ecc, ecc)
+					for k := range ecc {
+						io.ReadFull(crand.Reader, ecc[k][:otpSize])
+						checksum := crc32.ChecksumIEEE(ecc[k][cryptHeaderSize:])
+						binary.LittleEndian.PutUint32(ecc[k][otpSize:], checksum)
+						s.block.Encrypt(ecc[k], ecc[k])
+					}
 				}
 			}
 
@@ -374,12 +381,14 @@ func (s *UDPSession) outputTask() {
 			//}
 
 			if ecc != nil {
-				n, err := s.conn.WriteTo(ecc, s.remote)
-				if err != nil {
-					log.Println(err, n)
+				for k := range ecc {
+					n, err := s.conn.WriteTo(ecc[k], s.remote)
+					if err != nil {
+						log.Println(err, n)
+					}
+					atomic.AddUint64(&DefaultSnmp.OutSegs, 1)
+					atomic.AddUint64(&DefaultSnmp.OutBytes, uint64(n))
 				}
-				atomic.AddUint64(&DefaultSnmp.OutSegs, 1)
-				atomic.AddUint64(&DefaultSnmp.OutBytes, uint64(n))
 			}
 		case <-ticker.C: // only for NAT keep purpose
 			sz := rng.Intn(IKCP_MTU_DEF - s.headerSize - IKCP_OVERHEAD)
@@ -460,14 +469,16 @@ func (s *UDPSession) kcpInput(data []byte) {
 				atomic.AddUint64(&DefaultSnmp.FECSegs, 1)
 			}
 
-			if ecc := s.fec.input(f); ecc != nil {
-				sz := binary.LittleEndian.Uint16(ecc)
-				if int(sz) <= len(ecc) && sz >= 2 {
-					s.kcp.current = currentMs()
-					s.kcp.Input(ecc[2:sz])
-					atomic.AddUint64(&DefaultSnmp.FECRecovered, 1)
-				} else {
-					atomic.AddUint64(&DefaultSnmp.FECErrs, 1)
+			if recovers := s.fec.input(f); recovers != nil {
+				for k := range recovers {
+					sz := binary.LittleEndian.Uint16(recovers[k])
+					if int(sz) <= len(recovers[k]) && sz >= 2 {
+						s.kcp.current = currentMs()
+						s.kcp.Input(recovers[k][2:sz])
+						atomic.AddUint64(&DefaultSnmp.FECRecovered, 1)
+					} else {
+						atomic.AddUint64(&DefaultSnmp.FECErrs, 1)
+					}
 				}
 			}
 		}

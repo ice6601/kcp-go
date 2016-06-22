@@ -154,6 +154,7 @@ func client3(wg *sync.WaitGroup) {
 		panic(err)
 	}
 	cli.SetNoDelay(0, 20, 2, 1)
+	time.Sleep(time.Second)
 	start := time.Now()
 
 	go func() {

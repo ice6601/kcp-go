@@ -7,73 +7,86 @@ import (
 )
 
 func TestFECNoLost(t *testing.T) {
-	fec := newFEC(3, 128)
-	for i := 0; i < 100; i += 3 {
-		data := makefecgroup(i, 3)
+	fec := newFEC(128, 10, 3)
+	for i := 0; i < 100; i += 10 {
+		data := makefecgroup(i, 10)
 		for k := range data {
 			fec.markData(data[k])
 			t.Log("input:", data[k])
 		}
-		ecc := fec.calcECC(data)
-		fec.markFEC(ecc)
+		ecc := fec.calcECC(data, fecHeaderSize, fecHeaderSize+4)
+		for k := range ecc {
+			fec.markFEC(ecc[k])
+		}
 		t.Log("  ecc:", ecc)
-		data = append(data, ecc)
+		data = append(data, ecc...)
 		for k := range data {
 			f := fecDecode(data[k])
 			if recovered := fec.input(f); recovered != nil {
-				t.Log("recovered:", binary.LittleEndian.Uint32(ecc))
+				for k := range recovered {
+					t.Log("recovered:", binary.LittleEndian.Uint32(recovered[k]))
+				}
 			}
 		}
 	}
 }
 
 func TestFECLost1(t *testing.T) {
-	fec := newFEC(4, 128)
-	for i := 0; i < 100; i += 4 {
-		data := makefecgroup(i, 4)
+	fec := newFEC(128, 10, 3)
+	for i := 0; i < 100; i += 10 {
+		data := makefecgroup(i, 10)
 		for k := range data {
 			fec.markData(data[k])
 			t.Log("input:", data[k])
 		}
-		ecc := fec.calcECC(data)
-		fec.markFEC(ecc)
+		ecc := fec.calcECC(data, fecHeaderSize, fecHeaderSize+4)
+		for k := range ecc {
+			println(ecc[k])
+			fec.markFEC(ecc[k])
+		}
 		t.Log("  ecc:", ecc)
-		data = append(data, ecc)
-		lost := rand.Intn(5)
+		data = append(data, ecc...)
+		lost := rand.Intn(13)
 		t.Log(" lost:", data[lost])
-		data = append(data[:lost], data[lost+1:]...)
 		for k := range data {
-			f := fecDecode(data[k])
-			if recovered := fec.input(f); recovered != nil {
-				t.Log("recovered:", recovered)
+			if k != lost {
+				f := fecDecode(data[k])
+				if recovered := fec.input(f); recovered != nil {
+					for k := range recovered {
+						t.Log("recovered:", binary.LittleEndian.Uint32(recovered[k]))
+					}
+				}
 			}
 		}
 	}
 }
 
 func TestFECLost2(t *testing.T) {
-	fec := newFEC(5, 128)
-	for i := 0; i < 100; i += 5 {
-		data := makefecgroup(i, 5)
+	fec := newFEC(128, 10, 3)
+	for i := 0; i < 100; i += 10 {
+		data := makefecgroup(i, 10)
 		for k := range data {
 			fec.markData(data[k])
 			t.Log("input:", data[k])
 		}
-		ecc := fec.calcECC(data)
-		fec.markFEC(ecc)
+		ecc := fec.calcECC(data, fecHeaderSize, fecHeaderSize+4)
+		for k := range ecc {
+			println(ecc[k])
+			fec.markFEC(ecc[k])
+		}
 		t.Log("  ecc:", ecc)
-		data = append(data, ecc)
-		lost := rand.Intn(6)
-		t.Log(" lost:", data[lost])
-		data = append(data[:lost], data[lost+1:]...)
-		lost = rand.Intn(5)
-		t.Log(" lost:", data[lost])
-		data = append(data[:lost], data[lost+1:]...)
-
+		data = append(data, ecc...)
+		lost1, lost2 := rand.Intn(13), rand.Intn(13)
+		t.Log(" lost1:", data[lost1])
+		t.Log(" lost2:", data[lost2])
 		for k := range data {
-			f := fecDecode(data[k])
-			if recovered := fec.input(f); recovered != nil {
-				t.Log("recovered:", recovered)
+			if k != lost1 && k != lost2 {
+				f := fecDecode(data[k])
+				if recovered := fec.input(f); recovered != nil {
+					for k := range recovered {
+						t.Log("recovered:", binary.LittleEndian.Uint32(recovered[k]))
+					}
+				}
 			}
 		}
 	}
