@@ -74,7 +74,9 @@ func newUDPSession(conv uint32, dataShards, parityShards int, l *Listener, conn 
 	sess.conn = conn
 	sess.l = l
 	sess.block = block
-	sess.fec = newFEC(rxFecLimit, dataShards, parityShards)
+	if sess.fec = newFEC(rxFecLimit, dataShards, parityShards); sess.fec == nil {
+		return nil
+	}
 
 	// caculate header size
 	if sess.block != nil {
@@ -602,10 +604,13 @@ func (l *Listener) monitor() {
 					}
 
 					if convValid {
-						s := newUDPSession(conv, l.dataShards, l.parityShards, l, l.conn, from, l.block)
-						s.kcpInput(data)
-						l.sessions[addr] = s
-						l.chAccepts <- s
+						if s := newUDPSession(conv, l.dataShards, l.parityShards, l, l.conn, from, l.block); s != nil {
+							s.kcpInput(data)
+							l.sessions[addr] = s
+							l.chAccepts <- s
+						} else {
+							log.Println("cannot create session")
+						}
 					}
 				} else {
 					s.kcpInput(data)

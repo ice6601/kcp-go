@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+func TestFECOther(t *testing.T) {
+	t.Log(newFEC(128, 0, 1))
+}
+
 func TestFECNoLost(t *testing.T) {
 	fec := newFEC(128, 10, 3)
 	for i := 0; i < 100; i += 10 {
