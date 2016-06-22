@@ -116,7 +116,9 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 		maxlen := 0
 		for i := searchBegin; i <= searchEnd; i++ {
 			seqid := fec.rx[i].seqid
-			if seqid >= shardBegin && seqid <= shardEnd {
+			if seqid > shardEnd {
+				break
+			} else if seqid >= shardBegin {
 				shards[seqid%uint32(fec.shardSize)] = fec.rx[i].data
 				numshard++
 				if numshard == 1 {
@@ -175,14 +177,14 @@ func (fec *FEC) calcECC(data [][]byte, offset, maxlen int) (ecc [][]byte) {
 		return nil
 	}
 	shards := make([][]byte, fec.shardSize)
-	for k := range data {
-		shards[k] = data[k][offset:maxlen]
-	}
-
-	for i := fec.dataShards; i < fec.shardSize; i++ {
-		parity := make([]byte, maxlen)
-		ecc = append(ecc, parity)
-		shards[i] = parity[offset:maxlen]
+	for k := range shards {
+		if k < fec.dataShards {
+			shards[k] = data[k][offset:maxlen]
+		} else {
+			parity := make([]byte, maxlen)
+			ecc = append(ecc, parity)
+			shards[k] = parity[offset:maxlen]
+		}
 	}
 
 	if err := fec.enc.Encode(shards); err == nil {
