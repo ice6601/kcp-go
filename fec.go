@@ -25,6 +25,8 @@ type (
 		shardSize    int
 		next         uint32 // next seqid
 		enc          reedsolomon.Encoder
+		shards       [][]byte
+		shardsflag   []bool
 	}
 
 	fecPacket struct {
@@ -50,6 +52,8 @@ func newFEC(rxlimit, dataShards, parityShards int) *FEC {
 		return nil
 	}
 	fec.enc = enc
+	fec.shards = make([][]byte, fec.shardSize)
+	fec.shardsflag = make([]bool, fec.shardSize)
 	return fec
 }
 
@@ -110,16 +114,23 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 	}
 
 	if len(fec.rx) >= fec.dataShards {
-		shards := make([][]byte, fec.shardSize)
 		numshard := 0
 		first := -1
 		maxlen := 0
+		shards := fec.shards
+		shardsflag := fec.shardsflag
+		for k := range fec.shards {
+			shards[k] = nil
+			shardsflag[k] = false
+		}
+
 		for i := searchBegin; i <= searchEnd; i++ {
 			seqid := fec.rx[i].seqid
 			if seqid > shardEnd {
 				break
 			} else if seqid >= shardBegin {
 				shards[seqid%uint32(fec.shardSize)] = fec.rx[i].data
+				shardsflag[seqid%uint32(fec.shardSize)] = true
 				numshard++
 				if numshard == 1 {
 					first = i
@@ -140,11 +151,9 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 					shards[k] = shards[k][:maxlen]
 				}
 			}
-			old := make([][]byte, fec.shardSize)
-			copy(old, shards)
 			if err := fec.enc.Reconstruct(shards); err == nil {
-				for k := range old[:fec.dataShards] {
-					if old[k] == nil {
+				for k := range shards[:fec.dataShards] {
+					if !shardsflag[k] {
 						recovered = append(recovered, shards[k])
 					}
 				}
