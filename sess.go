@@ -90,7 +90,10 @@ func newUDPSession(conv uint32, fec int, l *Listener, conn *net.UDPConn, remote 
 		if size >= IKCP_OVERHEAD {
 			ext := make([]byte, sess.headerSize+size)
 			copy(ext[sess.headerSize:], buf)
-			sess.chUDPOutput <- ext
+			select {
+			case sess.chUDPOutput <- ext:
+			case <-sess.die:
+			}
 		}
 	})
 	sess.kcp.WndSize(defaultWndSize, defaultWndSize)
@@ -492,7 +495,10 @@ func (s *UDPSession) receiver(ch chan []byte) {
 	for {
 		data := make([]byte, mtuLimit)
 		if n, _, err := s.conn.ReadFromUDP(data); err == nil && n >= s.headerSize+IKCP_OVERHEAD {
-			ch <- data[:n]
+			select {
+			case ch <- data[:n]:
+			case <-s.die:
+			}
 		} else if err != nil {
 			return
 		} else {
