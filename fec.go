@@ -149,7 +149,7 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 				copy(fec.rx[first:], fec.rx[first+numshard:])
 				fec.rx = fec.rx[:len(fec.rx)-numshard]
 			} else {
-				log.Println("###", err)
+				log.Println(err)
 			}
 		}
 	}
@@ -188,7 +188,7 @@ func (fec *FEC) calcECC(data [][]byte, offset, maxlen int) (ecc [][]byte) {
 	if err := fec.enc.Encode(shards); err == nil {
 		return ecc
 	} else {
-		log.Println("####", err)
+		log.Println(err)
 	}
 	return nil
 }
