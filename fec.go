@@ -115,6 +115,7 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 
 	if len(fec.rx) >= fec.dataShards {
 		numshard := 0
+		numDataShard := 0
 		first := -1
 		maxlen := 0
 		shards := fec.shards
@@ -132,6 +133,9 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 				shards[seqid%uint32(fec.shardSize)] = fec.rx[i].data
 				shardsflag[seqid%uint32(fec.shardSize)] = true
 				numshard++
+				if fec.rx[i].flag == typeData {
+					numDataShard++
+				}
 				if numshard == 1 {
 					first = i
 				}
@@ -141,11 +145,10 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 			}
 		}
 
-		if numshard == fec.shardSize { // no lost
+		if numDataShard == fec.dataShards { // no lost
 			copy(fec.rx[first:], fec.rx[first+numshard:])
 			fec.rx = fec.rx[:len(fec.rx)-numshard]
 		} else if numshard >= fec.dataShards { // recoverable
-			// resize
 			for k := range shards {
 				if shards[k] != nil {
 					shards[k] = shards[k][:maxlen]
@@ -157,11 +160,11 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 						recovered = append(recovered, shards[k])
 					}
 				}
-				copy(fec.rx[first:], fec.rx[first+numshard:])
-				fec.rx = fec.rx[:len(fec.rx)-numshard]
 			} else {
 				log.Println(err)
 			}
+			copy(fec.rx[first:], fec.rx[first+numshard:])
+			fec.rx = fec.rx[:len(fec.rx)-numshard]
 		}
 	}
 
@@ -196,10 +199,9 @@ func (fec *FEC) calcECC(data [][]byte, offset, maxlen int) (ecc [][]byte) {
 		}
 	}
 
-	if err := fec.enc.Encode(shards); err == nil {
-		return ecc
-	} else {
+	if err := fec.enc.Encode(shards); err != nil {
 		log.Println(err)
+		return nil
 	}
-	return nil
+	return ecc
 }
