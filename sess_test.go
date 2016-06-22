@@ -22,7 +22,7 @@ func DialTest() (*UDPSession, error) {
 	//block, _ := NewSimpleXORBlockCrypt(pass)
 	//block, _ := NewTEABlockCrypt(pass[:16])
 	//block, _ := NewAESBlockCrypt(pass)
-	return DialWithOptions(fec, port, block)
+	return DialWithOptions(port, block, 10, 3)
 }
 
 func ListenTest() (*Listener, error) {
@@ -31,7 +31,7 @@ func ListenTest() (*Listener, error) {
 	//block, _ := NewSimpleXORBlockCrypt(pass)
 	//block, _ := NewTEABlockCrypt(pass[:16])
 	//block, _ := NewAESBlockCrypt(pass)
-	return ListenWithOptions(fec, port, block)
+	return ListenWithOptions(port, block, 10, 3)
 }
 
 func server() {

@@ -62,7 +62,7 @@ type (
 )
 
 // newUDPSession create a new udp session for client or server
-func newUDPSession(conv uint32, fec int, l *Listener, conn *net.UDPConn, remote *net.UDPAddr, block BlockCrypt) *UDPSession {
+func newUDPSession(conv uint32, dataShards, parityShards int, l *Listener, conn *net.UDPConn, remote *net.UDPAddr, block BlockCrypt) *UDPSession {
 	sess := new(UDPSession)
 	sess.chTicker = make(chan time.Time, 1)
 	sess.chUDPOutput = make(chan []byte, rxQueueLimit)
@@ -74,17 +74,13 @@ func newUDPSession(conv uint32, fec int, l *Listener, conn *net.UDPConn, remote 
 	sess.conn = conn
 	sess.l = l
 	sess.block = block
-	if fec > 0 {
-		sess.fec = newFEC(rxFecLimit, 10, 3)
-	}
+	sess.fec = newFEC(rxFecLimit, dataShards, parityShards)
 
 	// caculate header size
 	if sess.block != nil {
 		sess.headerSize += cryptHeaderSize
 	}
-	if sess.fec != nil {
-		sess.headerSize += fecHeaderSizePlus2
-	}
+	sess.headerSize += fecHeaderSizePlus2
 
 	sess.kcp = NewKCP(conv, func(buf []byte, size int) {
 		if size >= IKCP_OVERHEAD {
@@ -311,18 +307,18 @@ func (s *UDPSession) SetDSCP(tos int) {
 }
 
 func (s *UDPSession) outputTask() {
+	// offset pre-compute
 	fecOffset := 0
 	if s.block != nil {
 		fecOffset = cryptHeaderSize
 	}
 	szOffset := fecOffset + fecHeaderSize
 
+	// fec data group
 	var fec_group [][]byte
 	var fec_cnt int
 	var fec_maxlen int
-	if s.fec != nil {
-		fec_group = make([][]byte, s.fec.dataShards)
-	}
+	fec_group = make([][]byte, s.fec.dataShards)
 
 	// ping
 	ticker := time.NewTicker(5 * time.Second)
@@ -331,28 +327,26 @@ func (s *UDPSession) outputTask() {
 		select {
 		case ext := <-s.chUDPOutput:
 			var ecc [][]byte
-			if s.fec != nil {
-				s.fec.markData(ext[fecOffset:])
-				// add 2B size
-				binary.LittleEndian.PutUint16(ext[szOffset:], uint16(len(ext[szOffset:])))
+			s.fec.markData(ext[fecOffset:])
+			// add 2B size
+			binary.LittleEndian.PutUint16(ext[szOffset:], uint16(len(ext[szOffset:])))
 
-				// copy data to fec group
-				fec_group[fec_cnt] = make([]byte, mtuLimit)
-				copy(fec_group[fec_cnt], ext)
-				fec_cnt++
-				if len(ext) > fec_maxlen {
-					fec_maxlen = len(ext)
-				}
+			// copy data to fec group
+			fec_group[fec_cnt] = make([]byte, mtuLimit)
+			copy(fec_group[fec_cnt], ext)
+			fec_cnt++
+			if len(ext) > fec_maxlen {
+				fec_maxlen = len(ext)
+			}
 
-				// cacluation of ecc
-				if fec_cnt == s.fec.dataShards {
-					ecc = s.fec.calcECC(fec_group, szOffset, fec_maxlen)
-					for k := range ecc {
-						s.fec.markFEC(ecc[k][fecOffset:])
-					}
-					fec_cnt = 0
-					fec_maxlen = 0
+			// cacluation of ecc
+			if fec_cnt == s.fec.dataShards {
+				ecc = s.fec.calcECC(fec_group, szOffset, fec_maxlen)
+				for k := range ecc {
+					s.fec.markFEC(ecc[k][fecOffset:])
 				}
+				fec_cnt = 0
+				fec_maxlen = 0
 			}
 
 			if s.block != nil {
@@ -553,14 +547,14 @@ func (s *UDPSession) readLoop() {
 type (
 	// Listener defines a server listening for connections
 	Listener struct {
-		block       BlockCrypt
-		fec         int
-		conn        *net.UDPConn
-		sessions    map[string]*UDPSession
-		chAccepts   chan *UDPSession
-		chDeadlinks chan net.Addr
-		headerSize  int
-		die         chan struct{}
+		block                    BlockCrypt
+		dataShards, parityShards int
+		conn                     *net.UDPConn
+		sessions                 map[string]*UDPSession
+		chAccepts                chan *UDPSession
+		chDeadlinks              chan net.Addr
+		headerSize               int
+		die                      chan struct{}
 	}
 
 	packet struct {
@@ -601,19 +595,14 @@ func (l *Listener) monitor() {
 				if !ok { // new session
 					var conv uint32
 					convValid := false
-					if l.fec > 0 { // has fec header
-						isfec := binary.LittleEndian.Uint16(data[4:])
-						if isfec == typeData {
-							conv = binary.LittleEndian.Uint32(data[fecHeaderSizePlus2:])
-							convValid = true
-						}
-					} else { // direct read
-						conv = binary.LittleEndian.Uint32(data)
+					isfec := binary.LittleEndian.Uint16(data[4:])
+					if isfec == typeData {
+						conv = binary.LittleEndian.Uint32(data[fecHeaderSizePlus2:])
 						convValid = true
 					}
 
 					if convValid {
-						s := newUDPSession(conv, l.fec, l, l.conn, from, l.block)
+						s := newUDPSession(conv, l.dataShards, l.parityShards, l, l.conn, from, l.block)
 						s.kcpInput(data)
 						l.sessions[addr] = s
 						l.chAccepts <- s
@@ -678,12 +667,12 @@ func (l *Listener) Addr() net.Addr {
 
 // Listen listens for incoming KCP packets addressed to the local address laddr on the network "udp",
 func Listen(laddr string) (*Listener, error) {
-	return ListenWithOptions(0, laddr, nil)
+	return ListenWithOptions(laddr, nil, 10, 3)
 }
 
 // ListenWithOptions listens for incoming KCP packets addressed to the local address laddr on the network "udp" with packet encryption,
-// FEC = 0 means no FEC, FEC > 0 means num(FEC) as a FEC cluster
-func ListenWithOptions(fec int, laddr string, block BlockCrypt) (*Listener, error) {
+// dataShards, parityShards defines Reed-Solomon Erasure Coding parameters
+func ListenWithOptions(laddr string, block BlockCrypt, dataShards, parityShards int) (*Listener, error) {
 	udpaddr, err := net.ResolveUDPAddr("udp", laddr)
 	if err != nil {
 		return nil, err
@@ -701,16 +690,15 @@ func ListenWithOptions(fec int, laddr string, block BlockCrypt) (*Listener, erro
 	l.chAccepts = make(chan *UDPSession, 1024)
 	l.chDeadlinks = make(chan net.Addr, 1024)
 	l.die = make(chan struct{})
-	l.fec = fec
+	l.dataShards = dataShards
+	l.parityShards = parityShards
 	l.block = block
 
 	// caculate header size
 	if l.block != nil {
 		l.headerSize += cryptHeaderSize
 	}
-	if l.fec > 0 {
-		l.headerSize += fecHeaderSizePlus2
-	}
+	l.headerSize += fecHeaderSizePlus2
 
 	go l.monitor()
 	return l, nil
@@ -718,11 +706,11 @@ func ListenWithOptions(fec int, laddr string, block BlockCrypt) (*Listener, erro
 
 // Dial connects to the remote address raddr on the network "udp"
 func Dial(raddr string) (*UDPSession, error) {
-	return DialWithOptions(0, raddr, nil)
+	return DialWithOptions(raddr, nil, 10, 3)
 }
 
 // DialWithOptions connects to the remote address raddr on the network "udp" with packet encryption
-func DialWithOptions(fec int, raddr string, block BlockCrypt) (*UDPSession, error) {
+func DialWithOptions(raddr string, block BlockCrypt, dataShards, parityShards int) (*UDPSession, error) {
 	udpaddr, err := net.ResolveUDPAddr("udp", raddr)
 	if err != nil {
 		return nil, err
@@ -732,7 +720,7 @@ func DialWithOptions(fec int, raddr string, block BlockCrypt) (*UDPSession, erro
 		if udpconn, err := net.ListenUDP("udp", &net.UDPAddr{Port: port}); err == nil {
 			udpconn.SetReadBuffer(soBuffer)
 			udpconn.SetWriteBuffer(soBuffer)
-			return newUDPSession(rng.Uint32(), fec, nil, udpconn, udpaddr, block), nil
+			return newUDPSession(rng.Uint32(), dataShards, parityShards, nil, udpconn, udpaddr, block), nil
 		}
 	}
 }

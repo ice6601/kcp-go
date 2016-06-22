@@ -76,13 +76,6 @@ func (fec *FEC) markFEC(data []byte) {
 
 // input a fec packet
 func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
-	/*
-		for i := 0; i < len(fec.rx); i++ {
-			print(fec.rx[i].seqid, " ")
-		}
-		println()
-	*/
-
 	n := len(fec.rx) - 1
 	insert_idx := 0
 	for i := n; i >= 0; i-- {
