@@ -96,8 +96,8 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 		fec.rx[insert_idx] = pkt
 	}
 
-	shardBegin := int(pkt.seqid) - int(pkt.seqid)%fec.shardSize
-	shardEnd := shardBegin + fec.shardSize - 1
+	shardBegin := pkt.seqid - pkt.seqid%uint32(fec.shardSize)
+	shardEnd := shardBegin + uint32(fec.shardSize) - 1
 
 	searchBegin := insert_idx - fec.shardSize
 	if searchBegin < 0 {
@@ -115,9 +115,9 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 		first := -1
 		maxlen := 0
 		for i := searchBegin; i <= searchEnd; i++ {
-			seqid := int(fec.rx[i].seqid)
+			seqid := fec.rx[i].seqid
 			if seqid >= shardBegin && seqid <= shardEnd {
-				shards[seqid%fec.shardSize] = fec.rx[i].data
+				shards[seqid%uint32(fec.shardSize)] = fec.rx[i].data
 				numshard++
 				if numshard == 1 {
 					first = i
