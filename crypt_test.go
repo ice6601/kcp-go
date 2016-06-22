@@ -40,7 +40,7 @@ func TestTEA(t *testing.T) {
 	t.Log(data)
 }
 
-func TestXOR(t *testing.T) {
+func TestSimpleXOR(t *testing.T) {
 	pass := pbkdf2.Key(key, []byte(salt), 4096, 16, sha1.New)
 	bc, err := NewSimpleXORBlockCrypt(pass)
 	if err != nil {
