@@ -12,6 +12,7 @@ const (
 	fecHeaderSizePlus2 = fecHeaderSize + 2 // plus 2B data size
 	typeData           = 0xf1
 	typeFEC            = 0xf2
+	fecExpire          = 30000 // 30s
 )
 
 type (
@@ -27,12 +28,14 @@ type (
 		shards       [][]byte
 		shardsflag   []bool
 		paws         uint32 // Protect Against Wrapped Sequence numbers
+		lastCheck    uint32
 	}
 
 	fecPacket struct {
 		seqid uint32
 		flag  uint16
 		data  []byte
+		ts    uint32
 	}
 )
 
@@ -63,6 +66,7 @@ func fecDecode(data []byte) fecPacket {
 	var pkt fecPacket
 	pkt.seqid = binary.LittleEndian.Uint32(data)
 	pkt.flag = binary.LittleEndian.Uint16(data[4:])
+	pkt.ts = currentMs()
 	pkt.data = data[6:]
 	return pkt
 }
@@ -87,6 +91,20 @@ func (fec *FEC) markFEC(data []byte) {
 
 // input a fec packet
 func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
+	// expiration
+	now := currentMs()
+	if now-fec.lastCheck >= fecExpire {
+		var rx []fecPacket
+		for k := range fec.rx {
+			if now-fec.rx[k].ts < fecExpire {
+				rx = append(rx, fec.rx[k])
+			}
+		}
+		fec.rx = rx
+		fec.lastCheck = now
+	}
+
+	// insertion
 	n := len(fec.rx) - 1
 	insert_idx := 0
 	for i := n; i >= 0; i-- {
