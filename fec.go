@@ -113,7 +113,7 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 		searchEnd = len(fec.rx) - 1
 	}
 
-	if len(fec.rx) >= fec.dataShards {
+	if len(fec.rx) >= fec.dataShards && shardBegin < shardEnd {
 		numshard := 0
 		numDataShard := 0
 		first := -1
