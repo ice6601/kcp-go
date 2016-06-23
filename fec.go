@@ -10,7 +10,6 @@ import (
 const (
 	fecHeaderSize      = 6
 	fecHeaderSizePlus2 = fecHeaderSize + 2 // plus 2B data size
-	fecOverflow        = 1e7
 	typeData           = 0xf1
 	typeFEC            = 0xf2
 )
@@ -27,6 +26,7 @@ type (
 		enc          reedsolomon.Encoder
 		shards       [][]byte
 		shardsflag   []bool
+		paws         uint32 // Protect Against Wrapped Sequence numbers
 	}
 
 	fecPacket struct {
@@ -46,6 +46,7 @@ func newFEC(rxlimit, dataShards, parityShards int) *FEC {
 	fec.dataShards = dataShards
 	fec.parityShards = parityShards
 	fec.shardSize = dataShards + parityShards
+	fec.paws = (0xffffffff/uint32(fec.shardSize) - 1) * uint32(fec.shardSize)
 	enc, err := reedsolomon.New(dataShards, parityShards)
 	if err != nil {
 		log.Println(err)
@@ -70,12 +71,18 @@ func (fec *FEC) markData(data []byte) {
 	binary.LittleEndian.PutUint32(data, fec.next)
 	binary.LittleEndian.PutUint16(data[4:], typeData)
 	fec.next++
+	if fec.next >= fec.paws {
+		fec.next = 0
+	}
 }
 
 func (fec *FEC) markFEC(data []byte) {
 	binary.LittleEndian.PutUint32(data, fec.next)
 	binary.LittleEndian.PutUint16(data[4:], typeFEC)
 	fec.next++
+	if fec.next >= fec.paws {
+		fec.next = 0
+	}
 }
 
 // input a fec packet
@@ -165,14 +172,6 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 			}
 			copy(fec.rx[first:], fec.rx[first+numshard:])
 			fec.rx = fec.rx[:len(fec.rx)-numshard]
-		}
-	}
-
-	// prevention of seqid overflows uint32
-	if len(fec.rx) >= 2 {
-		n := len(fec.rx) - 1
-		if int64(fec.rx[n].seqid)-int64(fec.rx[0].seqid) > fecOverflow {
-			fec.rx = nil
 		}
 	}
 
