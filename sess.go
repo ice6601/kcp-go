@@ -31,7 +31,7 @@ const (
 	cryptHeaderSize = nonceSize + crcSize
 	connTimeout     = 60 * time.Second
 	mtuLimit        = 4096
-	rxQueueLimit    = 8192
+	txQueueLimit    = 8192
 	rxFecLimit      = 2048
 	soBuffer        = 16777216
 )
@@ -58,6 +58,7 @@ type (
 		chUDPOutput   chan []byte
 		headerSize    int
 		ackNoDelay    bool
+		rxbuf         sync.Pool
 	}
 )
 
@@ -65,7 +66,7 @@ type (
 func newUDPSession(conv uint32, dataShards, parityShards int, l *Listener, conn *net.UDPConn, remote *net.UDPAddr, block BlockCrypt) *UDPSession {
 	sess := new(UDPSession)
 	sess.chTicker = make(chan time.Time, 1)
-	sess.chUDPOutput = make(chan []byte, rxQueueLimit)
+	sess.chUDPOutput = make(chan []byte, txQueueLimit)
 	sess.die = make(chan struct{})
 	sess.local = conn.LocalAddr()
 	sess.chReadEvent = make(chan struct{}, 1)
@@ -75,6 +76,9 @@ func newUDPSession(conv uint32, dataShards, parityShards int, l *Listener, conn 
 	sess.l = l
 	sess.block = block
 	sess.fec = newFEC(rxFecLimit, dataShards, parityShards)
+	sess.rxbuf.New = func() interface{} {
+		return make([]byte, mtuLimit)
+	}
 	// caculate header size
 	if sess.block != nil {
 		sess.headerSize += cryptHeaderSize
@@ -503,7 +507,8 @@ func (s *UDPSession) kcpInput(data []byte) {
 
 func (s *UDPSession) receiver(ch chan []byte) {
 	for {
-		data := make([]byte, mtuLimit)
+		data := s.rxbuf.Get().([]byte)[:mtuLimit]
+		xorBytes(data, data, data)
 		if n, _, err := s.conn.ReadFromUDP(data); err == nil && n >= s.headerSize+IKCP_OVERHEAD {
 			select {
 			case ch <- data[:n]:
@@ -519,12 +524,13 @@ func (s *UDPSession) receiver(ch chan []byte) {
 
 // read loop for client session
 func (s *UDPSession) readLoop() {
-	chPacket := make(chan []byte, rxQueueLimit)
+	chPacket := make(chan []byte, txQueueLimit)
 	go s.receiver(chPacket)
 
 	for {
 		select {
 		case data := <-chPacket:
+			raw := data
 			dataValid := false
 			if s.block != nil {
 				s.block.Decrypt(data, data)
@@ -543,6 +549,7 @@ func (s *UDPSession) readLoop() {
 			if dataValid {
 				s.kcpInput(data)
 			}
+			s.rxbuf.Put(raw)
 		case <-s.die:
 			return
 		}
@@ -561,6 +568,7 @@ type (
 		chDeadlinks              chan net.Addr
 		headerSize               int
 		die                      chan struct{}
+		rxbuf                    sync.Pool
 	}
 
 	packet struct {
@@ -571,7 +579,7 @@ type (
 
 // monitor incoming data for all connections of server
 func (l *Listener) monitor() {
-	chPacket := make(chan packet, rxQueueLimit)
+	chPacket := make(chan packet, txQueueLimit)
 	go l.receiver(chPacket)
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
@@ -625,6 +633,7 @@ func (l *Listener) monitor() {
 					s.kcpInput(data)
 				}
 			}
+			l.rxbuf.Put(p.data)
 		case deadlink := <-l.chDeadlinks:
 			delete(l.sessions, deadlink.String())
 		case <-l.die:
@@ -643,7 +652,8 @@ func (l *Listener) monitor() {
 
 func (l *Listener) receiver(ch chan packet) {
 	for {
-		data := make([]byte, mtuLimit)
+		data := l.rxbuf.Get().([]byte)[:mtuLimit]
+		xorBytes(data, data, data)
 		if n, from, err := l.conn.ReadFromUDP(data); err == nil && n >= l.headerSize+IKCP_OVERHEAD {
 			ch <- packet{from, data[:n]}
 		} else if err != nil {
@@ -708,6 +718,9 @@ func ListenWithOptions(laddr string, block BlockCrypt, dataShards, parityShards 
 	l.parityShards = parityShards
 	l.block = block
 	l.fec = newFEC(rxFecLimit, dataShards, parityShards)
+	l.rxbuf.New = func() interface{} {
+		return make([]byte, mtuLimit)
+	}
 
 	// caculate header size
 	if l.block != nil {
