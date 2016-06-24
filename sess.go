@@ -324,7 +324,10 @@ func (s *UDPSession) outputTask() {
 	var fec_cnt int
 	var fec_maxlen int
 	if s.fec != nil {
-		fec_group = make([][]byte, s.fec.dataShards)
+		fec_group = make([][]byte, s.fec.shardSize)
+		for k := range fec_group {
+			fec_group[k] = make([]byte, mtuLimit)
+		}
 	}
 
 	// ping
@@ -340,7 +343,6 @@ func (s *UDPSession) outputTask() {
 				binary.LittleEndian.PutUint16(ext[szOffset:], uint16(len(ext[szOffset:])))
 
 				// copy data to fec group
-				fec_group[fec_cnt] = make([]byte, mtuLimit)
 				copy(fec_group[fec_cnt], ext)
 				fec_cnt++
 				if len(ext) > fec_maxlen {
@@ -391,6 +393,9 @@ func (s *UDPSession) outputTask() {
 					}
 					atomic.AddUint64(&DefaultSnmp.OutSegs, 1)
 					atomic.AddUint64(&DefaultSnmp.OutBytes, uint64(n))
+				}
+				for k := range fec_group {
+					xorBytes(fec_group[k], fec_group[k], fec_group[k])
 				}
 			}
 			xorBytes(ext, ext, ext)

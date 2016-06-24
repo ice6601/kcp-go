@@ -204,24 +204,18 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 }
 
 func (fec *FEC) calcECC(data [][]byte, offset, maxlen int) (ecc [][]byte) {
-	if len(data) != fec.dataShards {
-		println("mismatch", len(data), fec.dataShards)
+	if len(data) != fec.shardSize {
+		println("mismatch", len(data), fec.shardSize)
 		return nil
 	}
 	shards := make([][]byte, fec.shardSize)
 	for k := range shards {
-		if k < fec.dataShards {
-			shards[k] = data[k][offset:maxlen]
-		} else {
-			parity := make([]byte, maxlen)
-			ecc = append(ecc, parity)
-			shards[k] = parity[offset:maxlen]
-		}
+		shards[k] = data[k][offset:maxlen]
 	}
 
 	if err := fec.enc.Encode(shards); err != nil {
 		log.Println(err)
 		return nil
 	}
-	return ecc
+	return data[fec.dataShards:]
 }
