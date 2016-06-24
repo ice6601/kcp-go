@@ -74,15 +74,14 @@ func newUDPSession(conv uint32, dataShards, parityShards int, l *Listener, conn 
 	sess.conn = conn
 	sess.l = l
 	sess.block = block
-	if sess.fec = newFEC(rxFecLimit, dataShards, parityShards); sess.fec == nil {
-		return nil
-	}
-
+	sess.fec = newFEC(rxFecLimit, dataShards, parityShards)
 	// caculate header size
 	if sess.block != nil {
 		sess.headerSize += cryptHeaderSize
 	}
-	sess.headerSize += fecHeaderSizePlus2
+	if sess.fec != nil {
+		sess.headerSize += fecHeaderSizePlus2
+	}
 
 	sess.kcp = NewKCP(conv, func(buf []byte, size int) {
 		if size >= IKCP_OVERHEAD {
@@ -320,7 +319,9 @@ func (s *UDPSession) outputTask() {
 	var fec_group [][]byte
 	var fec_cnt int
 	var fec_maxlen int
-	fec_group = make([][]byte, s.fec.dataShards)
+	if s.fec != nil {
+		fec_group = make([][]byte, s.fec.dataShards)
+	}
 
 	// ping
 	ticker := time.NewTicker(5 * time.Second)
@@ -329,26 +330,28 @@ func (s *UDPSession) outputTask() {
 		select {
 		case ext := <-s.chUDPOutput:
 			var ecc [][]byte
-			s.fec.markData(ext[fecOffset:])
-			// add 2B size
-			binary.LittleEndian.PutUint16(ext[szOffset:], uint16(len(ext[szOffset:])))
+			if s.fec != nil {
+				s.fec.markData(ext[fecOffset:])
+				// explict size
+				binary.LittleEndian.PutUint16(ext[szOffset:], uint16(len(ext[szOffset:])))
 
-			// copy data to fec group
-			fec_group[fec_cnt] = make([]byte, mtuLimit)
-			copy(fec_group[fec_cnt], ext)
-			fec_cnt++
-			if len(ext) > fec_maxlen {
-				fec_maxlen = len(ext)
-			}
-
-			// cacluation of ecc
-			if fec_cnt == s.fec.dataShards {
-				ecc = s.fec.calcECC(fec_group, szOffset, fec_maxlen)
-				for k := range ecc {
-					s.fec.markFEC(ecc[k][fecOffset:])
+				// copy data to fec group
+				fec_group[fec_cnt] = make([]byte, mtuLimit)
+				copy(fec_group[fec_cnt], ext)
+				fec_cnt++
+				if len(ext) > fec_maxlen {
+					fec_maxlen = len(ext)
 				}
-				fec_cnt = 0
-				fec_maxlen = 0
+
+				//  calculate Reed-Solomon Erasure Code
+				if fec_cnt == s.fec.dataShards {
+					ecc = s.fec.calcECC(fec_group, szOffset, fec_maxlen)
+					for k := range ecc {
+						s.fec.markFEC(ecc[k][fecOffset:])
+					}
+					fec_cnt = 0
+					fec_maxlen = 0
+				}
 			}
 
 			if s.block != nil {
@@ -551,6 +554,7 @@ type (
 	Listener struct {
 		block                    BlockCrypt
 		dataShards, parityShards int
+		fec                      *FEC // for fec init test
 		conn                     *net.UDPConn
 		sessions                 map[string]*UDPSession
 		chAccepts                chan *UDPSession
@@ -597,9 +601,14 @@ func (l *Listener) monitor() {
 				if !ok { // new session
 					var conv uint32
 					convValid := false
-					isfec := binary.LittleEndian.Uint16(data[4:])
-					if isfec == typeData {
-						conv = binary.LittleEndian.Uint32(data[fecHeaderSizePlus2:])
+					if l.fec != nil {
+						isfec := binary.LittleEndian.Uint16(data[4:])
+						if isfec == typeData {
+							conv = binary.LittleEndian.Uint32(data[fecHeaderSizePlus2:])
+							convValid = true
+						}
+					} else {
+						conv = binary.LittleEndian.Uint32(data)
 						convValid = true
 					}
 
@@ -698,12 +707,15 @@ func ListenWithOptions(laddr string, block BlockCrypt, dataShards, parityShards 
 	l.dataShards = dataShards
 	l.parityShards = parityShards
 	l.block = block
+	l.fec = newFEC(rxFecLimit, dataShards, parityShards)
 
 	// caculate header size
 	if l.block != nil {
 		l.headerSize += cryptHeaderSize
 	}
-	l.headerSize += fecHeaderSizePlus2
+	if l.fec != nil {
+		l.headerSize += fecHeaderSizePlus2
+	}
 
 	go l.monitor()
 	return l, nil
