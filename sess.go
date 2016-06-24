@@ -30,7 +30,7 @@ const (
 	crcSize         = 4     // 4bytes packet checksum
 	cryptHeaderSize = nonceSize + crcSize
 	connTimeout     = 60 * time.Second
-	mtuLimit        = 4096
+	mtuLimit        = 2048
 	txQueueLimit    = 8192
 	rxFecLimit      = 2048
 	soBuffer        = 16777216
@@ -58,7 +58,7 @@ type (
 		chUDPOutput   chan []byte
 		headerSize    int
 		ackNoDelay    bool
-		rxbuf         sync.Pool
+		xmitBuf       sync.Pool
 	}
 )
 
@@ -76,7 +76,7 @@ func newUDPSession(conv uint32, dataShards, parityShards int, l *Listener, conn 
 	sess.l = l
 	sess.block = block
 	sess.fec = newFEC(rxFecLimit, dataShards, parityShards)
-	sess.rxbuf.New = func() interface{} {
+	sess.xmitBuf.New = func() interface{} {
 		return make([]byte, mtuLimit)
 	}
 	// caculate header size
@@ -89,7 +89,7 @@ func newUDPSession(conv uint32, dataShards, parityShards int, l *Listener, conn 
 
 	sess.kcp = NewKCP(conv, func(buf []byte, size int) {
 		if size >= IKCP_OVERHEAD {
-			ext := make([]byte, sess.headerSize+size)
+			ext := sess.xmitBuf.Get().([]byte)[:sess.headerSize+size]
 			copy(ext[sess.headerSize:], buf)
 			select {
 			case sess.chUDPOutput <- ext:
@@ -393,6 +393,8 @@ func (s *UDPSession) outputTask() {
 					atomic.AddUint64(&DefaultSnmp.OutBytes, uint64(n))
 				}
 			}
+			xorBytes(ext, ext, ext)
+			s.xmitBuf.Put(ext)
 		case <-ticker.C: // only for NAT keep purpose
 			sz := rng.Intn(IKCP_MTU_DEF - s.headerSize - IKCP_OVERHEAD)
 			sz += s.headerSize + IKCP_OVERHEAD
@@ -507,8 +509,7 @@ func (s *UDPSession) kcpInput(data []byte) {
 
 func (s *UDPSession) receiver(ch chan []byte) {
 	for {
-		data := s.rxbuf.Get().([]byte)[:mtuLimit]
-		xorBytes(data, data, data)
+		data := s.xmitBuf.Get().([]byte)[:mtuLimit]
 		if n, _, err := s.conn.ReadFromUDP(data); err == nil && n >= s.headerSize+IKCP_OVERHEAD {
 			select {
 			case ch <- data[:n]:
@@ -549,7 +550,8 @@ func (s *UDPSession) readLoop() {
 			if dataValid {
 				s.kcpInput(data)
 			}
-			s.rxbuf.Put(raw)
+			xorBytes(raw, raw, raw)
+			s.xmitBuf.Put(raw)
 		case <-s.die:
 			return
 		}
@@ -586,6 +588,7 @@ func (l *Listener) monitor() {
 	for {
 		select {
 		case p := <-chPacket:
+			raw := p.data
 			data := p.data
 			from := p.from
 			dataValid := false
@@ -633,7 +636,9 @@ func (l *Listener) monitor() {
 					s.kcpInput(data)
 				}
 			}
-			l.rxbuf.Put(p.data)
+
+			xorBytes(raw, raw, raw)
+			l.rxbuf.Put(raw)
 		case deadlink := <-l.chDeadlinks:
 			delete(l.sessions, deadlink.String())
 		case <-l.die:
@@ -653,7 +658,6 @@ func (l *Listener) monitor() {
 func (l *Listener) receiver(ch chan packet) {
 	for {
 		data := l.rxbuf.Get().([]byte)[:mtuLimit]
-		xorBytes(data, data, data)
 		if n, from, err := l.conn.ReadFromUDP(data); err == nil && n >= l.headerSize+IKCP_OVERHEAD {
 			ch <- packet{from, data[:n]}
 		} else if err != nil {
