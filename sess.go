@@ -26,9 +26,9 @@ const (
 	basePort        = 20000 // minimum port for listening
 	maxPort         = 65535 // maximum port for listening
 	defaultWndSize  = 128   // default window size, in packet
-	otpSize         = 16    // magic number
+	nonceSize       = 16    // magic number
 	crcSize         = 4     // 4bytes packet checksum
-	cryptHeaderSize = otpSize + crcSize
+	cryptHeaderSize = nonceSize + crcSize
 	connTimeout     = 60 * time.Second
 	mtuLimit        = 4096
 	rxQueueLimit    = 8192
@@ -352,16 +352,16 @@ func (s *UDPSession) outputTask() {
 			}
 
 			if s.block != nil {
-				io.ReadFull(crand.Reader, ext[:otpSize]) // OTP
+				io.ReadFull(crand.Reader, ext[:nonceSize])
 				checksum := crc32.ChecksumIEEE(ext[cryptHeaderSize:])
-				binary.LittleEndian.PutUint32(ext[otpSize:], checksum)
+				binary.LittleEndian.PutUint32(ext[nonceSize:], checksum)
 				s.block.Encrypt(ext, ext)
 
 				if ecc != nil {
 					for k := range ecc {
-						io.ReadFull(crand.Reader, ecc[k][:otpSize])
+						io.ReadFull(crand.Reader, ecc[k][:nonceSize])
 						checksum := crc32.ChecksumIEEE(ecc[k][cryptHeaderSize:])
-						binary.LittleEndian.PutUint32(ecc[k][otpSize:], checksum)
+						binary.LittleEndian.PutUint32(ecc[k][nonceSize:], checksum)
 						s.block.Encrypt(ecc[k], ecc[k])
 					}
 				}
@@ -525,7 +525,7 @@ func (s *UDPSession) readLoop() {
 			dataValid := false
 			if s.block != nil {
 				s.block.Decrypt(data, data)
-				data = data[otpSize:]
+				data = data[nonceSize:]
 				checksum := crc32.ChecksumIEEE(data[crcSize:])
 				if checksum == binary.LittleEndian.Uint32(data) {
 					data = data[crcSize:]
@@ -579,7 +579,7 @@ func (l *Listener) monitor() {
 			dataValid := false
 			if l.block != nil {
 				l.block.Decrypt(data, data)
-				data = data[otpSize:]
+				data = data[nonceSize:]
 				checksum := crc32.ChecksumIEEE(data[crcSize:])
 				if checksum == binary.LittleEndian.Uint32(data) {
 					data = data[crcSize:]
