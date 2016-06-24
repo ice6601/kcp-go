@@ -355,6 +355,7 @@ func (s *UDPSession) outputTask() {
 					ecc = s.fec.calcECC(fec_group, szOffset, fec_maxlen)
 					for k := range ecc {
 						s.fec.markFEC(ecc[k][fecOffset:])
+						ecc[k] = ecc[k][:fec_maxlen]
 					}
 					fec_cnt = 0
 					fec_maxlen = 0
