@@ -64,10 +64,13 @@ func newFEC(rxlimit, dataShards, parityShards int) *FEC {
 // decode a fec packet
 func fecDecode(data []byte) fecPacket {
 	var pkt fecPacket
-	pkt.seqid = binary.LittleEndian.Uint32(data)
-	pkt.flag = binary.LittleEndian.Uint16(data[4:])
+	buf := make([]byte, mtuLimit)
+	copy(buf, data)
+
+	pkt.seqid = binary.LittleEndian.Uint32(buf)
+	pkt.flag = binary.LittleEndian.Uint16(buf[4:])
+	pkt.data = buf[6:]
 	pkt.ts = currentMs()
-	pkt.data = data[6:]
 	return pkt
 }
 
