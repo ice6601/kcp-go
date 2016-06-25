@@ -108,6 +108,8 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 		for k := range fec.rx {
 			if now-fec.rx[k].ts < fecExpire {
 				rx = append(rx, fec.rx[k])
+			} else {
+				fec.xmitBuf.Put(fec.rx[k].data)
 			}
 		}
 		fec.rx = rx
