@@ -3,6 +3,7 @@ package kcp
 import (
 	"encoding/binary"
 	"log"
+	"sync"
 
 	"github.com/klauspost/reedsolomon"
 )
@@ -29,6 +30,7 @@ type (
 		shardsflag   []bool
 		paws         uint32 // Protect Against Wrapped Sequence numbers
 		lastCheck    uint32
+		xmitBuf      sync.Pool
 	}
 
 	fecPacket struct {
@@ -58,19 +60,24 @@ func newFEC(rxlimit, dataShards, parityShards int) *FEC {
 	fec.enc = enc
 	fec.shards = make([][]byte, fec.shardSize)
 	fec.shardsflag = make([]bool, fec.shardSize)
+	fec.xmitBuf.New = func() interface{} {
+		return make([]byte, mtuLimit)
+	}
+
 	return fec
 }
 
 // decode a fec packet
-func fecDecode(data []byte) fecPacket {
+func (fec *FEC) decode(data []byte) fecPacket {
 	var pkt fecPacket
-	buf := make([]byte, mtuLimit)
-	copy(buf, data)
-
-	pkt.seqid = binary.LittleEndian.Uint32(buf)
-	pkt.flag = binary.LittleEndian.Uint16(buf[4:])
-	pkt.data = buf[6:]
+	pkt.seqid = binary.LittleEndian.Uint32(data)
+	pkt.flag = binary.LittleEndian.Uint16(data[4:])
 	pkt.ts = currentMs()
+	// alloc & copy
+	buf := fec.xmitBuf.Get().([]byte)
+	xorBytes(buf, buf, buf)
+	copy(buf, data[6:])
+	pkt.data = buf
 	return pkt
 }
 
@@ -112,6 +119,7 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 	insert_idx := 0
 	for i := n; i >= 0; i-- {
 		if pkt.seqid == fec.rx[i].seqid { // de-duplicate
+			fec.xmitBuf.Put(pkt.data)
 			return nil
 		} else if pkt.seqid > fec.rx[i].seqid { // insertion
 			insert_idx = i + 1
@@ -174,6 +182,9 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 		}
 
 		if numDataShard == fec.dataShards { // no lost
+			for i := first; i < first+numshard; i++ { // free
+				fec.xmitBuf.Put(fec.rx[i].data)
+			}
 			copy(fec.rx[first:], fec.rx[first+numshard:])
 			fec.rx = fec.rx[:len(fec.rx)-numshard]
 		} else if numshard >= fec.dataShards { // recoverable
@@ -191,6 +202,10 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 			} else {
 				log.Println(err)
 			}
+
+			for i := first; i < first+numshard; i++ { // free
+				fec.xmitBuf.Put(fec.rx[i].data)
+			}
 			copy(fec.rx[first:], fec.rx[first+numshard:])
 			fec.rx = fec.rx[:len(fec.rx)-numshard]
 		}
@@ -198,6 +213,7 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 
 	// keep rxlen
 	if len(fec.rx) > fec.rxlimit {
+		fec.xmitBuf.Put(fec.rx[0].data) // free
 		fec.rx = fec.rx[1:]
 	}
 	return

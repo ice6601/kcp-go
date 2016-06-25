@@ -26,7 +26,7 @@ func TestFECNoLost(t *testing.T) {
 		t.Log("  ecc:", ecc)
 		data = append(data, ecc...)
 		for k := range data {
-			f := fecDecode(data[k])
+			f := fec.decode(data[k])
 			if recovered := fec.input(f); recovered != nil {
 				for k := range recovered {
 					t.Log("recovered:", binary.LittleEndian.Uint32(recovered[k]))
@@ -53,7 +53,7 @@ func TestFECLost1(t *testing.T) {
 		t.Log("lost:", data[lost])
 		for k := range data {
 			if k != lost {
-				f := fecDecode(data[k])
+				f := fec.decode(data[k])
 				if recovered := fec.input(f); recovered != nil {
 					for i := range recovered {
 						t.Log("recovered:", binary.LittleEndian.Uint32(recovered[i]))
@@ -82,7 +82,7 @@ func TestFECLost2(t *testing.T) {
 		t.Log(" lost2:", data[lost2])
 		for k := range data {
 			if k != lost1 && k != lost2 {
-				f := fecDecode(data[k])
+				f := fec.decode(data[k])
 				if recovered := fec.input(f); recovered != nil {
 					for i := range recovered {
 						t.Log("recovered:", binary.LittleEndian.Uint32(recovered[i]))

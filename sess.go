@@ -472,7 +472,7 @@ func (s *UDPSession) kcpInput(data []byte) {
 	atomic.AddUint64(&DefaultSnmp.InSegs, 1)
 	s.mu.Lock()
 	if s.fec != nil {
-		f := fecDecode(data)
+		f := s.fec.decode(data)
 		if f.flag == typeData || f.flag == typeFEC {
 			if f.flag == typeFEC {
 				atomic.AddUint64(&DefaultSnmp.FECSegs, 1)
