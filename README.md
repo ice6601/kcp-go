@@ -24,7 +24,7 @@ A port of [KCP](https://github.com/skywind3000/kcp) in [golang](https://golang.o
 # ***Conventions*** :zap:
 1. [UDP](https://en.wikipedia.org/wiki/User_Datagram_Protocol)  for packet delivery.
 2. ```conv uint32``` in session manager is a ***random number*** initiated by client.
-3. KCP doesn't define control messages like SYN/ACK/FIN/RST in TCP, a real world example is to use some ***multiplexing*** protocol over session, such as [yamux](https://github.com/hashicorp/yamux), sess [kcptun](https://github.com/xtaci/kcptun) as example.
+3. KCP doesn't define control messages like SYN/ACK/FIN/RST in TCP, a real world example is to use some ***multiplexing*** protocol over session, such as [yamux](https://github.com/hashicorp/yamux), see [kcptun](https://github.com/xtaci/kcptun) for example.
 
 # ***Performance*** :zap:
 ```
