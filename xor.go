@@ -22,24 +22,8 @@ func fastXORBytes(dst, a, b []byte) int {
 
 	w := n / wordSize
 	if w > 0 {
-		dw := *(*[]uintptr)(unsafe.Pointer(&dst))
-		aw := *(*[]uintptr)(unsafe.Pointer(&a))
-		bw := *(*[]uintptr)(unsafe.Pointer(&b))
-		ex := w % 8
-		for i := 0; i < ex; i++ {
-			dw[i] = aw[i] ^ bw[i]
-		}
-
-		for i := ex; i < w; i += 8 {
-			dw[i] = aw[i] ^ bw[i]
-			dw[i+1] = aw[i+1] ^ bw[i+1]
-			dw[i+2] = aw[i+2] ^ bw[i+2]
-			dw[i+3] = aw[i+3] ^ bw[i+3]
-			dw[i+4] = aw[i+4] ^ bw[i+4]
-			dw[i+5] = aw[i+5] ^ bw[i+5]
-			dw[i+6] = aw[i+6] ^ bw[i+6]
-			dw[i+7] = aw[i+7] ^ bw[i+7]
-		}
+		wordBytes := w * wordSize
+		fastXORWords(dst[:wordBytes], a[:wordBytes], b[:wordBytes])
 	}
 
 	for i := (n - n%wordSize); i < n; i++ {
