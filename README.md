@@ -28,6 +28,16 @@ A port of [KCP](https://github.com/skywind3000/kcp) in [golang](https://golang.o
 2. ```conv uint32``` in session manager is a ***random number*** initiated by client.
 3. KCP doesn't define control messages like SYN/ACK/FIN/RST in TCP, a real world example is to use some ***multiplexing*** protocol over session, such as [yamux](https://github.com/hashicorp/yamux), see [kcptun](https://github.com/xtaci/kcptun) for example.
 
+# ***Examples*** :zap:
+Client:   [full demo](https://github.com/xtaci/kcptun/blob/master/client/main.go#L231)
+```go
+kcpconn, err := kcp.DialWithOptions("192.168.0.1:10000", nil, 10, 3)
+```
+Server:   [full demo](https://github.com/xtaci/kcptun/blob/master/server/main.go#L235)
+```go
+lis, err := kcp.ListenWithOptions(":10000", nil, 10, 3)
+```
+
 # ***Performance*** :zap:
 ```
   型号名称：	MacBook Pro
