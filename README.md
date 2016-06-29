@@ -1,16 +1,18 @@
-# ***kcp-go*** :signal_strength:
-[![GoDoc][1]][2] [![Build Status][3]][4] [![Go Report Card][5]][6] [![Coverage Statusd][7]][8]
+# ***kcp-go*** :pisces:
+[![GoDoc][1]][2] [![Powered][9]][10] [![Build Status][3]][4] [![Go Report Card][5]][6] [![Coverage Statusd][7]][8] 
 
 [1]: https://godoc.org/github.com/xtaci/kcp-go?status.svg
 [2]: https://godoc.org/github.com/xtaci/kcp-go
 [3]: https://travis-ci.org/xtaci/kcp-go.svg?branch=master
 [4]: https://travis-ci.org/xtaci/kcp-go
-[5]: https://goreportcard.com/badge/xtaci/kcp-go
-[6]: https://goreportcard.com/report/xtaci/kcp-go
+[5]: https://goreportcard.com/badge/github.com/xtaci/kcp-go
+[6]: https://goreportcard.com/report/github.com/xtaci/kcp-go
 [7]: https://coveralls.io/repos/github/xtaci/kcp-go/badge.svg?branch=master
 [8]: https://coveralls.io/github/xtaci/kcp-go?branch=master
+[9]: https://img.shields.io/badge/KCP-Powered-blue.svg
+[10]: https://github.com/skywind3000/kcp
 
-A port of [KCP](https://github.com/skywind3000/kcp) in [golang](https://golang.org/) 
+A port of [KCP](https://github.com/skywind3000/kcp) in [golang](https://golang.org/) with session manager.
 
 # ***Features*** :zap:
 1. 100% compatible with original [skywind3000's](https://github.com/skywind3000) C version with modificiations.
