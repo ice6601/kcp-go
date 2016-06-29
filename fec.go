@@ -118,35 +118,35 @@ func (fec *FEC) input(pkt fecPacket) (recovered [][]byte) {
 
 	// insertion
 	n := len(fec.rx) - 1
-	insert_idx := 0
+	insertIdx := 0
 	for i := n; i >= 0; i-- {
 		if pkt.seqid == fec.rx[i].seqid { // de-duplicate
 			fec.xmitBuf.Put(pkt.data)
 			return nil
 		} else if pkt.seqid > fec.rx[i].seqid { // insertion
-			insert_idx = i + 1
+			insertIdx = i + 1
 			break
 		}
 	}
 
 	// insert into ordered rx queue
-	if insert_idx == n+1 {
+	if insertIdx == n+1 {
 		fec.rx = append(fec.rx, pkt)
 	} else {
 		fec.rx = append(fec.rx, fecPacket{})
-		copy(fec.rx[insert_idx+1:], fec.rx[insert_idx:])
-		fec.rx[insert_idx] = pkt
+		copy(fec.rx[insertIdx+1:], fec.rx[insertIdx:])
+		fec.rx[insertIdx] = pkt
 	}
 
 	shardBegin := pkt.seqid - pkt.seqid%uint32(fec.shardSize)
 	shardEnd := shardBegin + uint32(fec.shardSize) - 1
 
-	searchBegin := insert_idx - fec.shardSize
+	searchBegin := insertIdx - fec.shardSize
 	if searchBegin < 0 {
 		searchBegin = 0
 	}
 
-	searchEnd := insert_idx + fec.shardSize
+	searchEnd := insertIdx + fec.shardSize
 	if searchEnd >= len(fec.rx) {
 		searchEnd = len(fec.rx) - 1
 	}

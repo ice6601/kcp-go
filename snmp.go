@@ -29,6 +29,7 @@ func newSnmp() *Snmp {
 	return new(Snmp)
 }
 
+// Copy make a copy of current snmp snapshot
 func (s *Snmp) Copy() *Snmp {
 	d := newSnmp()
 	d.BytesSent = atomic.LoadUint64(&s.BytesSent)
@@ -53,6 +54,7 @@ func (s *Snmp) Copy() *Snmp {
 	return d
 }
 
+// DefaultSnmp is the global KCP connection statistics collector
 var DefaultSnmp *Snmp
 
 func init() {

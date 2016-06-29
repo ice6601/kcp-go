@@ -320,13 +320,13 @@ func (s *UDPSession) outputTask() {
 	szOffset := fecOffset + fecHeaderSize
 
 	// fec data group
-	var fec_group [][]byte
-	var fec_cnt int
-	var fec_maxlen int
+	var fecGroup [][]byte
+	var fecCnt int
+	var fecMaxSize int
 	if s.fec != nil {
-		fec_group = make([][]byte, s.fec.shardSize)
-		for k := range fec_group {
-			fec_group[k] = make([]byte, mtuLimit)
+		fecGroup = make([][]byte, s.fec.shardSize)
+		for k := range fecGroup {
+			fecGroup[k] = make([]byte, mtuLimit)
 		}
 	}
 
@@ -343,22 +343,22 @@ func (s *UDPSession) outputTask() {
 				binary.LittleEndian.PutUint16(ext[szOffset:], uint16(len(ext[szOffset:])))
 
 				// copy data to fec group
-				xorBytes(fec_group[fec_cnt], fec_group[fec_cnt], fec_group[fec_cnt])
-				copy(fec_group[fec_cnt], ext)
-				fec_cnt++
-				if len(ext) > fec_maxlen {
-					fec_maxlen = len(ext)
+				xorBytes(fecGroup[fecCnt], fecGroup[fecCnt], fecGroup[fecCnt])
+				copy(fecGroup[fecCnt], ext)
+				fecCnt++
+				if len(ext) > fecMaxSize {
+					fecMaxSize = len(ext)
 				}
 
 				//  calculate Reed-Solomon Erasure Code
-				if fec_cnt == s.fec.dataShards {
-					ecc = s.fec.calcECC(fec_group, szOffset, fec_maxlen)
+				if fecCnt == s.fec.dataShards {
+					ecc = s.fec.calcECC(fecGroup, szOffset, fecMaxSize)
 					for k := range ecc {
 						s.fec.markFEC(ecc[k][fecOffset:])
-						ecc[k] = ecc[k][:fec_maxlen]
+						ecc[k] = ecc[k][:fecMaxSize]
 					}
-					fec_cnt = 0
-					fec_maxlen = 0
+					fecCnt = 0
+					fecMaxSize = 0
 				}
 			}
 
