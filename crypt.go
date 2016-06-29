@@ -14,6 +14,7 @@ var (
 	saltxor       = `sH3CIVoF#rWLtJo6`
 )
 
+// BlockCrypt defines encryption/decryption methods for a given byte slice
 type BlockCrypt interface {
 	// Encrypt encrypts the whole block in src into dst.
 	// Dst and src may point at the same memory.
@@ -24,13 +25,14 @@ type BlockCrypt interface {
 	Decrypt(dst, src []byte)
 }
 
-// AES Block Encryption
+// AESBlockCrypt implements BlockCrypt with AES
 type AESBlockCrypt struct {
 	encbuf []byte
 	decbuf []byte
 	block  cipher.Block
 }
 
+// NewAESBlockCrypt initates AES BlockCrypt by the given key
 func NewAESBlockCrypt(key []byte) (BlockCrypt, error) {
 	c := new(AESBlockCrypt)
 	block, err := aes.NewCipher(key)
@@ -43,21 +45,24 @@ func NewAESBlockCrypt(key []byte) (BlockCrypt, error) {
 	return c, nil
 }
 
+// Encrypt implements Encrypt interface
 func (c *AESBlockCrypt) Encrypt(dst, src []byte) {
 	encrypt(c.block, dst, src, c.encbuf)
 }
 
+// Decrypt implements Decrypt interface
 func (c *AESBlockCrypt) Decrypt(dst, src []byte) {
 	decrypt(c.block, dst, src, c.decbuf)
 }
 
-// TEA Block Encryption
+// TEABlockCrypt implements BlockCrypt with TEA
 type TEABlockCrypt struct {
 	encbuf []byte
 	decbuf []byte
 	block  cipher.Block
 }
 
+// NewTEABlockCrypt initate TEA BlockCrypt by the given key
 func NewTEABlockCrypt(key []byte) (BlockCrypt, error) {
 	c := new(TEABlockCrypt)
 	block, err := tea.NewCipherWithRounds(key, 16)
@@ -70,43 +75,52 @@ func NewTEABlockCrypt(key []byte) (BlockCrypt, error) {
 	return c, nil
 }
 
+// Encrypt implements Encrypt interface
 func (c *TEABlockCrypt) Encrypt(dst, src []byte) {
 	encrypt(c.block, dst, src, c.encbuf)
 }
 
+// Decrypt implements Decrypt interface
 func (c *TEABlockCrypt) Decrypt(dst, src []byte) {
 	decrypt(c.block, dst, src, c.decbuf)
 }
 
-// Simple XOR Block Encryption, insecure
+// SimpleXORBlockCrypt implements BlockCrypt with simple xor to a table
 type SimpleXORBlockCrypt struct {
 	xortbl []byte
 }
 
+// NewSimpleXORBlockCrypt initate SimpleXORBlockCrypt by the given key
 func NewSimpleXORBlockCrypt(key []byte) (BlockCrypt, error) {
 	c := new(SimpleXORBlockCrypt)
 	c.xortbl = pbkdf2.Key(key, []byte(saltxor), 32, mtuLimit, sha1.New)
 	return c, nil
 }
 
+// Encrypt implements Encrypt interface
 func (c *SimpleXORBlockCrypt) Encrypt(dst, src []byte) {
 	xorBytes(dst, src, c.xortbl)
 }
 
+// Decrypt implements Decrypt interface
 func (c *SimpleXORBlockCrypt) Decrypt(dst, src []byte) {
 	xorBytes(dst, src, c.xortbl)
 }
 
-// None Encryption
+// NoneBlockCrypt simple returns the plaintext
 type NoneBlockCrypt struct {
 	xortbl []byte
 }
 
+// NewNoneBlockCrypt initate NoneBlockCrypt by the given key
 func NewNoneBlockCrypt(key []byte) (BlockCrypt, error) {
 	return new(NoneBlockCrypt), nil
 }
 
+// Encrypt implements Encrypt interface
 func (c *NoneBlockCrypt) Encrypt(dst, src []byte) {}
+
+// Decrypt implements Decrypt interface
 func (c *NoneBlockCrypt) Decrypt(dst, src []byte) {}
 
 // packet encryption with local CFB mode
