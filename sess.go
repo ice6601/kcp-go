@@ -79,7 +79,7 @@ func newUDPSession(conv uint32, dataShards, parityShards int, l *Listener, conn 
 	sess.xmitBuf.New = func() interface{} {
 		return make([]byte, mtuLimit)
 	}
-	// caculate header size
+	// calculate header size
 	if sess.block != nil {
 		sess.headerSize += cryptHeaderSize
 	}
@@ -302,12 +302,12 @@ func (s *UDPSession) SetNoDelay(nodelay, interval, resend, nc int) {
 	s.kcp.NoDelay(nodelay, interval, resend, nc)
 }
 
-// SetDSCP sets the DSCP field of IP header
-func (s *UDPSession) SetDSCP(tos int) {
+// SetDSCP sets the 6bit DSCP field of IP header
+func (s *UDPSession) SetDSCP(dscp int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := ipv4.NewConn(s.conn).SetTOS(tos << 2); err != nil {
-		log.Println("set tos:", err)
+	if err := ipv4.NewConn(s.conn).SetTOS(dscp << 2); err != nil {
+		log.Println("dscp:", err)
 	}
 }
 
@@ -730,7 +730,7 @@ func ListenWithOptions(laddr string, block BlockCrypt, dataShards, parityShards 
 		return make([]byte, mtuLimit)
 	}
 
-	// caculate header size
+	// calculate header size
 	if l.block != nil {
 		l.headerSize += cryptHeaderSize
 	}
@@ -742,12 +742,12 @@ func ListenWithOptions(laddr string, block BlockCrypt, dataShards, parityShards 
 	return l, nil
 }
 
-// Dial connects to the remote address raddr on the network "udp"
+// Dial connects to the remote address "raddr" on the network "udp"
 func Dial(raddr string) (*UDPSession, error) {
 	return DialWithOptions(raddr, nil, 10, 3)
 }
 
-// DialWithOptions connects to the remote address raddr on the network "udp" with packet encryption
+// DialWithOptions connects to the remote address "raddr" on the network "udp" with packet encryption
 func DialWithOptions(raddr string, block BlockCrypt, dataShards, parityShards int) (*UDPSession, error) {
 	udpaddr, err := net.ResolveUDPAddr("udp", raddr)
 	if err != nil {
