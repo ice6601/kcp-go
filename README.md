@@ -27,7 +27,7 @@ A port of [KCP](https://github.com/skywind3000/kcp) in [golang](https://golang.o
 ***A full-featured reliable UDP communication library for various usage***
 
 # ***Features*** :zap:
-1. Optimized for ***game development***.
+1. Optimized for ***Real-Time Strategy Game***.
 1. Compatible with [skywind3000's](https://github.com/skywind3000) C version with modifications.
 1. ***Cache friendly*** and ***Memory optimized*** design in golang.
 1. A [session manager](https://github.com/xtaci/kcp-go/blob/master/sess.go) has provided with compatibility for [net.Conn](https://golang.org/pkg/net/#Conn) and [net.Listener](https://golang.org/pkg/net/#Listener).
@@ -73,8 +73,9 @@ ok  	github.com/xtaci/kcp-go	0.600s
 ```
 
 # ***Links*** :zap:
-1. https://github.com/skywind3000/kcp -- A Fast and Reliable ARQ Protocol
-2. https://github.com/klauspost/reedsolomon -- Reed-Solomon Erasure Coding in Go
+1. https://github.com/xtaci/libkcp -- Official client library for iOS/Android
+2. https://github.com/skywind3000/kcp -- A Fast and Reliable ARQ Protocol
+3. https://github.com/klauspost/reedsolomon -- Reed-Solomon Erasure Coding in Go
 
 # ***Donation*** :dollar:
 ![donate](donate.png)          
