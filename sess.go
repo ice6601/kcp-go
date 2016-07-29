@@ -243,9 +243,7 @@ func (s *UDPSession) Close() error {
 }
 
 // LocalAddr returns the local network address. The Addr returned is shared by all invocations of LocalAddr, so do not modify it.
-func (s *UDPSession) LocalAddr() net.Addr {
-	return s.local
-}
+func (s *UDPSession) LocalAddr() net.Addr { return s.local }
 
 // RemoteAddr returns the remote network address. The Addr returned is shared by all invocations of RemoteAddr, so do not modify it.
 func (s *UDPSession) RemoteAddr() net.Addr { return s.remote }
@@ -287,6 +285,17 @@ func (s *UDPSession) SetMtu(mtu int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.kcp.SetMtu(mtu - s.headerSize)
+}
+
+// SetStreamMode toggles the stream mode on/off
+func (s *UDPSession) SetStreamMode(enable bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if enable {
+		s.kcp.stream = 1
+	} else {
+		s.kcp.stream = 0
+	}
 }
 
 // SetACKNoDelay changes ack flush option, set true to flush ack immediately,

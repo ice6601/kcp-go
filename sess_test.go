@@ -3,6 +3,7 @@ package kcp
 import (
 	"crypto/sha1"
 	"fmt"
+	"log"
 	"sync"
 	"testing"
 	"time"
@@ -39,6 +40,7 @@ func server() {
 	if err != nil {
 		panic(err)
 	}
+	log.Println("listening on:", l.Addr())
 	for {
 		s, err := l.Accept()
 		if err != nil {
@@ -54,8 +56,14 @@ func init() {
 }
 
 func handle_client(conn *UDPSession) {
+	conn.SetStreamMode(true)
 	conn.SetWindowSize(1024, 1024)
 	conn.SetNoDelay(1, 20, 2, 1)
+	conn.SetDSCP(46)
+	conn.SetMtu(1450)
+	conn.SetACKNoDelay(false)
+	conn.SetReadDeadline(time.Now().Add(time.Hour))
+	conn.SetWriteDeadline(time.Now().Add(time.Hour))
 	fmt.Println("new client", conn.RemoteAddr())
 	buf := make([]byte, 65536)
 	count := 0
@@ -66,6 +74,47 @@ func handle_client(conn *UDPSession) {
 		}
 		count++
 		conn.Write(buf[:n])
+	}
+}
+
+func TestTimeout(t *testing.T) {
+	cli, err := DialTest()
+	if err != nil {
+		panic(err)
+	}
+	buf := make([]byte, 10)
+
+	//timeout
+	cli.SetDeadline(time.Now().Add(time.Second))
+	<-time.After(2 * time.Second)
+	n, err := cli.Read(buf)
+	if n != 0 || err == nil {
+		t.Fail()
+	}
+	n, err = cli.Write(buf)
+	if n != 0 || err == nil {
+		t.Fail()
+	}
+}
+
+func TestClose(t *testing.T) {
+	cli, err := DialTest()
+	if err != nil {
+		panic(err)
+	}
+	buf := make([]byte, 10)
+
+	cli.Close()
+	if cli.Close() == nil {
+		t.Fail()
+	}
+	n, err := cli.Write(buf)
+	if n != 0 || err == nil {
+		t.Fail()
+	}
+	n, err = cli.Read(buf)
+	if n != 0 || err == nil {
+		t.Fail()
 	}
 }
 
@@ -84,7 +133,10 @@ func client(wg *sync.WaitGroup) {
 	if err != nil {
 		panic(err)
 	}
+	cli.SetStreamMode(true)
 	cli.SetNoDelay(1, 20, 2, 1)
+	cli.SetACKNoDelay(true)
+	cli.SetDeadline(time.Now().Add(time.Minute))
 	const N = 100
 	buf := make([]byte, 10)
 	for i := 0; i < N; i++ {
@@ -153,6 +205,8 @@ func client3(wg *sync.WaitGroup) {
 	if err != nil {
 		panic(err)
 	}
+	log.Println("remote:", cli.RemoteAddr(), "local:", cli.LocalAddr())
+	log.Println("conv:", cli.GetConv())
 	cli.SetNoDelay(1, 20, 2, 1)
 	start := time.Now()
 

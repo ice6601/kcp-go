@@ -13,6 +13,7 @@
 [10]: https://github.com/skywind3000/kcp
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 A port of [KCP](https://github.com/skywind3000/kcp) in [golang](https://golang.org/) with session manager.
 
 # ***Features*** :zap:
@@ -25,6 +26,9 @@ A port of [KCP](https://github.com/skywind3000/kcp) in [golang](https://golang.o
 6. Support packet level encryption with [AES](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard), [TEA](https://en.wikipedia.org/wiki/Tiny_Encryption_Algorithm) and insecure SimpleXOR.
 =======
 ***A full-featured reliable UDP communication library for various usage***
+=======
+***A full-featured reliable UDP communication library.***
+>>>>>>> upstream/master
 
 # ***Features*** :zap:
 1. Optimized for ***Real-Time Strategy Game***.
@@ -73,7 +77,7 @@ ok  	github.com/xtaci/kcp-go	0.600s
 ```
 
 # ***Links*** :zap:
-1. https://github.com/xtaci/libkcp -- Official client library for iOS/Android
+1. https://github.com/xtaci/libkcp -- Official client library for iOS/Android(C++11)
 2. https://github.com/skywind3000/kcp -- A Fast and Reliable ARQ Protocol
 3. https://github.com/klauspost/reedsolomon -- Reed-Solomon Erasure Coding in Go
 
